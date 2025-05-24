@@ -35,3 +35,9 @@ jobs:
 
       - name: Lint and compile projects
         run: ./gradlew build --console=plain --no-daemon
+        env:
+          DB_HOST: localhost
+          DB_PORT: 3306
+          DB_NAME: test_db
+          DB_USER: root
+          DB_PASS: password
