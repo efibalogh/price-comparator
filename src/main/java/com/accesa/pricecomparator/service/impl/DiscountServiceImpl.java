@@ -28,7 +28,7 @@ public class DiscountServiceImpl implements DiscountService {
 
     @Override
     public List<Discount> getCurrent(LocalDate date) {
-        return discountRepository.findByFromDateLessThanEqualAndToDateGreaterThanEqual(date, date);
+        return discountRepository.findActiveOnDate(date);
     }
 
     @Override

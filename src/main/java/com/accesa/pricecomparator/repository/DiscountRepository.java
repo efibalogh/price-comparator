@@ -12,7 +12,8 @@ import java.util.List;
 @Repository
 public interface DiscountRepository extends JpaRepository<Discount, Long> {
 
-    List<Discount> findByFromDateLessThanEqualAndToDateGreaterThanEqual(LocalDate from, LocalDate to);
+    @Query("SELECT d from Discount d WHERE d.fromDate <= :date AND d.toDate >= :date")
+    List<Discount> findActiveOnDate(LocalDate date);
 
     List<Discount> findByDiscountDate(LocalDate discountDate);
 

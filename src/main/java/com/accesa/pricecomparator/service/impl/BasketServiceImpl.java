@@ -100,8 +100,7 @@ public class BasketServiceImpl implements BasketService {
         Map<String, List<ProductWithDiscount>> productsByName = new ConcurrentHashMap<>();
         
         // Get current discounts for the date
-        List<Discount> currentDiscounts = discountRepository
-                .findByFromDateLessThanEqualAndToDateGreaterThanEqual(date, date);
+        List<Discount> currentDiscounts = discountRepository.findActiveOnDate(date);
         Map<String, Map<String, Discount>> discountMap = currentDiscounts.stream()
                 .collect(Collectors.groupingBy(
                     Discount::getProductName,
