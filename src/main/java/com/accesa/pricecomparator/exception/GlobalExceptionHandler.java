@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     public record ErrorMessage(int status, String message) {}
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -23,7 +24,7 @@ public class GlobalExceptionHandler {
         log.error("Resource not found: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
-                .body(new ErrorMessage(HttpStatus.NOT_FOUND.value(), ex.getMessage()));
+                .body(new ErrorMessage(404, ex.getMessage()));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -31,7 +32,7 @@ public class GlobalExceptionHandler {
         log.error("Illegal argument: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorMessage(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
+                .body(new ErrorMessage(400, ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -47,7 +48,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<Map<String, String>> handleValidationException(HandlerMethodValidationException ex) {
         Map<String, String> errors = new ConcurrentHashMap<>();
-
         ex.getAllErrors().forEach(error -> {
             String field = error instanceof FieldError fe
                     ? fe.getField()
@@ -58,7 +58,6 @@ public class GlobalExceptionHandler {
             String message = error.getDefaultMessage();
             errors.put(field, message);
         });
-
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(errors);
@@ -69,10 +68,7 @@ public class GlobalExceptionHandler {
         log.error("Missing request parameter: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorMessage(
-                        HttpStatus.BAD_REQUEST.value(),
-                        "Missing request parameter: " + ex.getParameterName())
-                );
+                .body(new ErrorMessage(400, "Missing request parameter: " + ex.getParameterName()));
     }
 
     @ExceptionHandler(Exception.class)
@@ -80,9 +76,6 @@ public class GlobalExceptionHandler {
         log.error("An unexpected error occurred: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorMessage(
-                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                        "An unexpected error occurred. Please try again later.")
-                );
+                .body(new ErrorMessage(500, "An unexpected error occurred: " + ex.getMessage()));
     }
 }
