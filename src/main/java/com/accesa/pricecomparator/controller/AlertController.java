@@ -47,33 +47,45 @@ public class AlertController {
     }
 
     @PutMapping("/{id}/activate")
-    public ResponseEntity<Map<Integer, String>> activateAlert(@PathVariable("id") Long id) {
+    public ResponseEntity<?> activateAlert(@PathVariable("id") Long id) {
         try {
             log.info("Activating price alert with ID: {}", id);
             alertService.activate(id);
             return ResponseEntity
                     .status(HttpStatus.OK)
-                    .body(Map.of(200, "Price alert activated"));
+                    .body(Map.of(
+                            "status", 200,
+                            "message", "Price alert activated"
+                    ));
         } catch (ResourceNotFoundException e) {
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(404, "Price alert not found with ID: " + id));
+                    .body(Map.of(
+                            "status", 404,
+                            "message", "Price alert not found with ID: " + id
+                    ));
         }
     }
 
     @PutMapping("/{id}/deactivate")
-    public ResponseEntity<Map<Integer, String>> deactivateAlert(@PathVariable("id") Long id) {
+    public ResponseEntity<?> deactivateAlert(@PathVariable("id") Long id) {
         try {
             log.info("Deactivating price alert with ID: {}", id);
             alertService.deactivate(id);
             return ResponseEntity
                     .status(HttpStatus.OK)
-                    .body(Map.of(200, "Price alert deactivated"));
+                    .body(Map.of(
+                            "status", 200,
+                            "message", "Price alert deactivated"
+                    ));
         } catch (ResourceNotFoundException e) {
             log.error("Error deactivating price alert with ID {}: {}", id, e.getMessage());
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .body(Map.of(404, "Price alert not found with ID: " + id));
+                    .body(Map.of(
+                            "status", 404,
+                            "message", "Price alert not found with ID: " + id
+                    ));
         }
     }
 }
