@@ -11,7 +11,6 @@ import com.opencsv.CSVReaderBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,10 +35,7 @@ import static org.apache.commons.lang3.StringUtils.trim;
 @RequiredArgsConstructor
 public class CsvImporterServiceImpl implements CsvImporterService {
 
-    @Autowired
     private final ProductRepository productRepository;
-
-    @Autowired
     private final DiscountRepository discountRepository;
 
     private static final String PRODUCT_FILE_SUFFIX = ".csv";
@@ -73,6 +69,16 @@ public class CsvImporterServiceImpl implements CsvImporterService {
         }
     }
 
+    /**
+     * The main entry point for CSV data import with intelligent file type detection.
+     * File Processing Strategy:
+     * 1. Scans directory for all CSV files
+     * 2. Categorizes files based on naming convention:
+     *    - Files containing "_discounts_" are processed as discount data
+     *    - Other CSV files are processed as product price data
+     * 3. Processes each file type with appropriate parsing logic
+     * 4. Handles errors gracefully without stopping the entire import process
+     */
     @Override
     @Transactional
     public void importDataFrom(String directoryPath) {
@@ -85,9 +91,10 @@ public class CsvImporterServiceImpl implements CsvImporterService {
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.csv")) {
             for (Path filePath : stream) {
                 String filename = filePath.getFileName().toString();
+                // File type detection based on naming convention
                 if (filename.contains(DISCOUNT_FILE_INFIX)) {
                     importDiscountData(filePath);
-                } else if (filename.endsWith(PRODUCT_FILE_SUFFIX)) { // Ensure it's a product file
+                } else if (filename.endsWith(PRODUCT_FILE_SUFFIX)) {
                     importProductPriceData(filePath);
                 } else {
                     log.warn("Skipping unrecognized file: {}", filename);
@@ -120,41 +127,50 @@ public class CsvImporterServiceImpl implements CsvImporterService {
                 .build();
     }
 
-    private String normalizePackageUnit(String packageUnit) {
-        if ("role".equalsIgnoreCase(trim(packageUnit))) {
-            return "buc";
-        }
-        return trim(packageUnit);
-    }
-
-    // --- Product Import Methods ---
-
+    /**
+     * Processes product price data with sophisticated duplicate handling and data validation.
+     * Import Strategy:
+     * 1. Parses filename to extract store name and date using regex patterns
+     * 2. Loads existing products for the same store/date to enable update vs. insert logic
+     * 3. Processes each CSV line with duplicate detection within the same file
+     * 4. Performs upsert operations (update existing, insert new)
+     * 5. Provides detailed import statistics
+     * Data Integrity Features:
+     * - Skips malformed lines with detailed error logging
+     * - Prevents duplicate processing within the same file
+     * - Handles both new product creation and existing product updates
+     * - Normalizes package units for consistency (e.g., "role" -> "buc")
+     */
     private void importProductPriceData(Path filePath) {
         String filename = filePath.getFileName().toString();
         log.info("Importing product price data from: {}", filename);
 
+        // Extract store name and date from the filename using regex
         Optional<FileInfo> fileInfoOpt = parseFileName(filename, PRODUCT_FILENAME_PATTERN, "product price");
         if (fileInfoOpt.isEmpty()) {
             return;
         }
         FileInfo fileInfo = fileInfoOpt.get();
 
+        // Preload existing products for efficient upsert operations
+        // Key: productId, Value: existing Product entity
         Map<String, Product> existingProductMap = productRepository
                 .findByStoreAndPriceDate(fileInfo.storeName(), fileInfo.date())
                 .stream()
                 .collect(Collectors.toMap(Product::getProductId, product -> product));
 
         List<Product> productsToSave = new ArrayList<>();
+        // Track processed IDs within this file to prevent duplicates
         Set<String> processedProductIdsInFile = new HashSet<>();
         ImportCounters counters = new ImportCounters();
 
         try (CSVReader reader = createCsvReader(filePath)) {
-            reader.readNext(); // Skip header
+            reader.readNext(); // Skip header row
             String[] line;
             while (true) {
                 line = reader.readNext();
                 if (line == null) {
-                    break; // EOF
+                    break; // End of the file reached
                 }
                 processProductLine(
                         line,
@@ -174,6 +190,15 @@ public class CsvImporterServiceImpl implements CsvImporterService {
         }
     }
 
+    /**
+     * Processes a single product line with comprehensive validation and error handling.
+     * Processing Logic:
+     * 1. Validates a line format (minimum required fields)
+     * 2. Checks for duplicate product IDs within the same file
+     * 3. Determines whether to update an existing product or create a new one
+     * 4. Handles parsing errors gracefully with detailed logging
+     * 5. Updates import statistics for reporting
+     */
     private void processProductLine(
             String[] line,
             FileInfo fileInfo,
@@ -183,6 +208,7 @@ public class CsvImporterServiceImpl implements CsvImporterService {
             ImportCounters counters,
             String filename
     ) {
+        // Validate minimum required fields
         if (line.length < 8) {
             log.warn("Skipping malformed product line in {}: {}", filename, String.join(";", line));
             return;
@@ -198,16 +224,13 @@ public class CsvImporterServiceImpl implements CsvImporterService {
 
         try {
             Product product;
+            // Upsert logic: update existing or create new
             if (existingProductMap.containsKey(productId)) {
                 product = existingProductMap.get(productId);
                 updateProductFromCsvLine(product, line);
                 counters.incrementUpdatedCount();
             } else {
-                product = createProductFromCsvLine(
-                        line,
-                        fileInfo.storeName(),
-                        fileInfo.date()
-                );
+                product = createProductFromCsvLine(line, fileInfo.storeName(), fileInfo.date());
                 counters.incrementNewCount();
             }
             productsToSave.add(product);
@@ -292,12 +315,12 @@ public class CsvImporterServiceImpl implements CsvImporterService {
         ImportCounters counters = new ImportCounters();
 
         try (CSVReader reader = createCsvReader(filePath)) {
-            reader.readNext(); // Skip header
+            reader.readNext(); // Skip header row
             String[] line;
             while (true) {
                 line = reader.readNext();
                 if (line == null) {
-                    break; // EOF
+                    break; // End of the file reached
                 }
                 processDiscountLine(
                         line,
@@ -411,5 +434,18 @@ public class CsvImporterServiceImpl implements CsvImporterService {
                 counters.updatedCount,
                 counters.duplicatesSkipped
         );
+    }
+
+    /**
+     * Normalizes package unit values for consistency across different data sources.
+     * Current Normalizations:
+     * - "role" -> "buc" (rolls to pieces)
+     * This method can be extended to handle other unit variations as they are discovered.
+     */
+    private String normalizePackageUnit(String packageUnit) {
+        if ("role".equalsIgnoreCase(trim(packageUnit))) {
+            return "buc";
+        }
+        return trim(packageUnit);
     }
 }

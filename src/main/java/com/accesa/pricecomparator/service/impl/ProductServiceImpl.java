@@ -8,7 +8,6 @@ import com.accesa.pricecomparator.repository.ProductRepository;
 import com.accesa.pricecomparator.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +24,6 @@ public class ProductServiceImpl implements ProductService {
 
     private static final Set<String> VALID_TYPES = Set.of("name", "category", "brand");
 
-    @Autowired
     private final ProductRepository productRepository;
 
     @Override

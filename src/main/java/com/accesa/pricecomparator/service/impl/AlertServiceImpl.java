@@ -65,6 +65,21 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
         log.info("Deactivated price alert with ID: {}", id);
     }
 
+    /**
+     * Comprehensive alert checking algorithm that processes all active alerts against current prices.
+     * Algorithm Details:
+     * 1. Retrieves all active alerts from the database
+     * 2. Builds a discount lookup map for efficient discount resolution
+     * 3. For each alert, finds the most recent product data within a reasonable timeframe
+     * 4. Applies any applicable discounts to calculate the effective price
+     * 5. Compares effective price against the alert's target price
+     * 6. Triggers alerts when effective price <= target price
+     * 7. Automatically deactivates triggered alerts to prevent spam
+     * Important Notes:
+     * - Uses a 1-month lookback period to find recent product data
+     * - Considers discounts in price comparisons (alerts trigger on effective price, not original price)
+     * - Alerts are automatically deactivated after triggering (one-time notification model)
+     */
     @Override
     @Transactional
     public List<TriggeredAlertResponse> checkAllAlertsForLatestPrices() {
@@ -84,15 +99,16 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
                 today
         );
         
-        // Get current discounts for today
+        // Pre-build discount map for efficient lookup during alert processing
         Map<String, Map<String, Discount>> discountMap = buildDiscountMap(today);
         
         for (Alert alert : activeAlerts) {
-            // Find the latest available product data for this specific product/store combination
+            // Strategy: Look for the most recent product data within a reasonable timeframe
+            // This handles cases where exact date matches might not exist
             var allProductVersions = productRepository.findByNameAndStoreAndPriceDateBetweenOrderByPriceDateAsc(
                     alert.getProductName(),
                     alert.getStore(),
-                    LocalDate.now().minusMonths(1), // Start from a reasonable past date
+                    LocalDate.now().minusMonths(1), // 1-month lookback window
                     today
             );
 
@@ -104,16 +120,15 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
                 continue;
             }
 
-            // Get the latest product data for this specific product/store
+            // Use the most recent product data (last in the chronologically ordered list)
             Product product = allProductVersions.getLast();
 
-            // Get an applicable discount for this product and store
+            // Apply any applicable discount to get the effective price
             Discount applicableDiscount = findApplicableDiscount(product, discountMap);
-
-            // Calculate effective price (considering discounts)
             ProductWithDiscount productWithDiscount = new ProductWithDiscount(product, applicableDiscount);
             BigDecimal effectivePrice = productWithDiscount.getEffectivePrice();
 
+            // Alert triggers when the effective price is at or below the target price
             if (effectivePrice.compareTo(alert.getTargetPrice()) <= 0) {
                 log.info("ALERT TRIGGERED! Product: {} at {}, Current: {} (Original: {}), Target: {}, Product Date: {}",
                         product.getName(),
@@ -130,12 +145,13 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
                         .productName(product.getName())
                         .store(product.getStore())
                         .targetPrice(alert.getTargetPrice())
-                        .currentPrice(effectivePrice)  // Use effective price instead of original price
+                        .currentPrice(effectivePrice)  // Use effective price (after discount) in response
                         .currency(product.getCurrency())
                         .message(message)
                         .build());
 
-                // Deactivate the alert to prevent repeated notifications
+                // Auto-deactivate to prevent repeated notifications
+                // This implements a "one-shot" alert model
                 alert.setActive(false);
                 alertRepository.save(alert);
 
@@ -147,6 +163,13 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
         return triggeredAlerts;
     }
 
+    /**
+     * Builds an efficient lookup structure for discounts.
+     * Structure: productName -> storeName -> bestDiscount
+     * Conflict Resolution Strategy:
+     * When multiple discounts exist for the same product/store combination,
+     * selects the discount with the highest percentage (most beneficial to customer).
+     */
     private Map<String, Map<String, Discount>> buildDiscountMap(LocalDate date) {
         return discountRepository.findActiveOnDate(date).stream()
                 .collect(Collectors.groupingBy(
@@ -154,6 +177,7 @@ public class AlertServiceImpl implements com.accesa.pricecomparator.service.Aler
                         Collectors.toMap(
                                 Discount::getStore,
                                 discount -> discount,
+                                // Choose the discount with the higher percentage if multiple exist
                                 (d1, d2) -> d1
                                         .getPercentageOfDiscount()
                                         .compareTo(d2.getPercentageOfDiscount()) > 0 ? d1 : d2

@@ -6,7 +6,6 @@ import com.accesa.pricecomparator.repository.DiscountRepository;
 import com.accesa.pricecomparator.service.DiscountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,7 +17,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DiscountServiceImpl implements DiscountService {
 
-    @Autowired
     private final DiscountRepository discountRepository;
 
     @Override

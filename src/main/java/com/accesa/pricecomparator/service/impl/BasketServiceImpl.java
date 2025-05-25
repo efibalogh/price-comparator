@@ -8,7 +8,6 @@ import com.accesa.pricecomparator.repository.ProductRepository;
 import com.accesa.pricecomparator.service.BasketService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,12 +24,19 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BasketServiceImpl implements BasketService {
 
-    @Autowired
     private final ProductRepository productRepository;
-
-    @Autowired
     private final DiscountRepository discountRepository;
 
+    /**
+     * Optimizes a shopping basket by finding the least expensive option for each item across all stores.
+     * Algorithm Overview:
+     * 1. Retrieve all products with their effective prices (original price minus applicable discounts)
+     * 2. For each basket item, find the store offering the lowest effective price
+     * 3. Group selected products by store to create optimized shopping lists
+     * 4. Calculate total costs and savings
+     * Note: This is a greedy algorithm that optimizes for individual item cost rather than 
+     * considering factors like travel costs between stores or bulk discounts.
+     */
     @Override
     public OptimizedBasketResponse optimize(List<BasketItemRequest> basketItems, LocalDate date) {
         log.info("Optimizing basket with {} items for date {}", basketItems.size(), date);
@@ -39,6 +45,7 @@ public class BasketServiceImpl implements BasketService {
         Map<String, List<ProductWithDiscount>> productsByName = getProductsWithDiscounts(basketItems, date);
         
         // Step 2: Find the least expensive option for each item
+        // Using ConcurrentHashMap for thread safety in case of future parallel processing
         Map<String, List<ProductSelection>> storeSelections = new ConcurrentHashMap<>();
         BigDecimal totalOriginalCost = BigDecimal.ZERO;
         BigDecimal totalCostAfterDiscounts = BigDecimal.ZERO;
@@ -50,11 +57,13 @@ public class BasketServiceImpl implements BasketService {
                 continue;
             }
             
-            // Find the least expensive option across all stores
+            // Greedy selection: choose the least expensive option regardless of store
+            // This may result in shopping at multiple stores but guarantees the lowest total cost
             ProductWithDiscount cheapest = availableProducts.stream()
                     .min(Comparator.comparing(ProductWithDiscount::getEffectivePrice))
                     .orElse(null);
 
+            // Calculate costs for this item (original vs. effective price)
             BigDecimal originalItemCost = cheapest
                     .getProduct()
                     .getPrice()
@@ -66,6 +75,7 @@ public class BasketServiceImpl implements BasketService {
             totalOriginalCost = totalOriginalCost.add(originalItemCost);
             totalCostAfterDiscounts = totalCostAfterDiscounts.add(effectiveItemCost);
 
+            // Group products by store for shopping list generation
             String store = cheapest.getProduct().getStore();
             storeSelections.computeIfAbsent(store, k -> new ArrayList<>())
                     .add(new ProductSelection(cheapest, item.getQuantity()));
@@ -91,7 +101,12 @@ public class BasketServiceImpl implements BasketService {
     }
 
     /**
-     * Get all products with their effective prices (after applying discounts)
+     * Builds a comprehensive map of products with their effective prices after applying discounts.
+     * The discount resolution strategy:
+     * - Groups discounts by product name and store
+     * - If multiple discounts exist for the same product/store combination, 
+     *   selects the one with the highest percentage (most beneficial to customer)
+     * - Only considers discounts that are active on the specified date
      */
     private Map<String, List<ProductWithDiscount>> getProductsWithDiscounts(
             List<BasketItemRequest> basketItems,
@@ -99,7 +114,8 @@ public class BasketServiceImpl implements BasketService {
     ) {
         Map<String, List<ProductWithDiscount>> productsByName = new ConcurrentHashMap<>();
         
-        // Get current discounts for the date
+        // Build the discount lookup map for efficient access
+        // Structure: productName -> storeName -> bestDiscount
         List<Discount> currentDiscounts = discountRepository.findActiveOnDate(date);
         Map<String, Map<String, Discount>> discountMap = currentDiscounts.stream()
                 .collect(Collectors.groupingBy(
@@ -107,16 +123,19 @@ public class BasketServiceImpl implements BasketService {
                     Collectors.toMap(
                         Discount::getStore,
                         discount -> discount,
+                        // Conflict resolution: choose discount with the higher percentage
                         (d1, d2) -> d1.getPercentageOfDiscount().compareTo(d2.getPercentageOfDiscount()) > 0 ? d1 : d2
                     )
                 ));
 
+        // For each requested item, find all available products and apply discounts
         for (BasketItemRequest item : basketItems) {
             List<Product> availableProducts = productRepository.findByNameAndPriceDate(item.getProductName(), date);
             
             if (!availableProducts.isEmpty()) {
                 List<ProductWithDiscount> productsWithDiscounts = availableProducts.stream()
                         .map(product -> {
+                            // Look up the applicable discount for this product/store combination
                             Discount applicableDiscount = null;
                             if (discountMap.containsKey(product.getName())
                                 && discountMap.get(product.getName()).containsKey(product.getStore())) {
