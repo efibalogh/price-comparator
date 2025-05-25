@@ -190,7 +190,8 @@ class AlertControllerTest {
         // When & Then
         mockMvc.perform(put("/api/alerts/{id}/activate", alertId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$['200']").value("Price alert activated"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("Price alert activated"));
 
         verify(alertService).activate(alertId);
     }
@@ -205,7 +206,8 @@ class AlertControllerTest {
         // When & Then
         mockMvc.perform(put("/api/alerts/{id}/activate", alertId))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$['404']").value("Price alert not found with ID: " + alertId));
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Price alert not found with ID: " + alertId));
 
         verify(alertService).activate(alertId);
     }
@@ -219,7 +221,8 @@ class AlertControllerTest {
         // When & Then
         mockMvc.perform(put("/api/alerts/{id}/deactivate", alertId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$['200']").value("Price alert deactivated"));
+                .andExpect(jsonPath("$.status").value(200))
+                .andExpect(jsonPath("$.message").value("Price alert deactivated"));
 
         verify(alertService).deactivate(alertId);
     }
@@ -234,7 +237,8 @@ class AlertControllerTest {
         // When & Then
         mockMvc.perform(put("/api/alerts/{id}/deactivate", alertId))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$['404']").value("Price alert not found with ID: " + alertId));
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Price alert not found with ID: " + alertId));
 
         verify(alertService).deactivate(alertId);
     }
