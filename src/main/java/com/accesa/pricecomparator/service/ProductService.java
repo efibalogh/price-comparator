@@ -57,15 +57,15 @@ public interface ProductService {
      * Provides data points for price trends over time.
      * Filterable by store, product category, or brand.
      *
-     * @param type "name", "category", or "brand"
-     * @param value The value of the type
+     * @param filter "name", "category", or "brand"
+     * @param value The value of the filter
      * @param store Optional: Filter by store
      * @param startDate Optional: Start date for the history
      * @param endDate Optional: End date for the history
      * @return List of ProductPriceHistoryDto
      */
     List<PriceHistoryResponse> getPriceHistory(
-            String type,
+            String filter,
             String value,
             String store,
             LocalDate startDate,

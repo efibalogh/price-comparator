@@ -93,15 +93,15 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public List<PriceHistoryResponse> getPriceHistory(
-            String type,
+            String filter,
             String value,
             String store,
             LocalDate startDate,
             LocalDate endDate
     ) {
-        String normalizedType = type.toLowerCase(Locale.getDefault());
-        if (!VALID_TYPES.contains(normalizedType)) {
-            log.warn("Invalid product history type provided: {}", type);
+        String normalizedFilter = filter.toLowerCase(Locale.getDefault());
+        if (!VALID_TYPES.contains(normalizedFilter)) {
+            log.warn("Invalid product history type provided: {}", filter);
             throw new IllegalArgumentException("Invalid identifier type. Must be 'name', 'category', or 'brand'.");
         }
         // If the startDate is missing, set it to a year ago
@@ -110,7 +110,7 @@ public class ProductServiceImpl implements ProductService {
         final LocalDate end = Objects.requireNonNullElseGet(endDate, () -> LocalDate.now().plusYears(1));
 
         List<Product> products = fetchProductsForHistory(
-                normalizedType,
+                normalizedFilter,
                 value,
                 store,
                 start,
@@ -121,26 +121,26 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private List<Product> fetchProductsForHistory(
-            String type,
+            String filter,
             String value,
             String store,
             LocalDate start,
             LocalDate end
     ) {
         if (store != null) {
-            return fetchProductsByStoreAndType(type, value, store, start, end);
+            return fetchProductsByStoreAndFilter(filter, value, store, start, end);
         }
-        return fetchProductsByType(type, value, start, end);
+        return fetchProductsByFilter(filter, value, start, end);
     }
 
-    private List<Product> fetchProductsByStoreAndType(
-            String type,
+    private List<Product> fetchProductsByStoreAndFilter(
+            String filter,
             String value,
             String store,
             LocalDate start,
             LocalDate end
     ) {
-        return switch (type) {
+        return switch (filter) {
             case "name" -> productRepository.findByNameAndStoreAndPriceDateBetweenOrderByPriceDateAsc(
                     value,
                     store,
@@ -161,19 +161,19 @@ public class ProductServiceImpl implements ProductService {
             );
             default -> {
                 // Should not be reached due to pre-validation
-                log.error("Invalid type '{}' in fetchProductsByStoreAndType after validation.", type);
-                throw new IllegalStateException("Invalid type: " + type);
+                log.error("Invalid filter '{}' in fetchProductsByStoreAndType after validation.", filter);
+                throw new IllegalStateException("Invalid filter: " + filter);
             }
         };
     }
 
-    private List<Product> fetchProductsByType(
-            String type,
+    private List<Product> fetchProductsByFilter(
+            String filter,
             String value,
             LocalDate start,
             LocalDate end
     ) {
-        return switch (type) {
+        return switch (filter) {
             case "name" -> productRepository.findByNameAndPriceDateBetweenOrderByPriceDateAsc(
                     value,
                     start,
@@ -191,8 +191,8 @@ public class ProductServiceImpl implements ProductService {
             );
             default -> {
                 // Should not be reached due to pre-validation
-                log.error("Invalid type '{}' in fetchProductsByType after validation.", type);
-                throw new IllegalStateException("Invalid type: " + type);
+                log.error("Invalid filter '{}' in fetchProductsByType after validation.", filter);
+                throw new IllegalStateException("Invalid filter: " + filter);
             }
         };
     }

@@ -44,21 +44,21 @@ public class ProductController {
 
     @GetMapping("/history")
     public ResponseEntity<List<PriceHistoryResponse>> getProductPriceHistory(
-            @RequestParam String type,
+            @RequestParam String filter,
             @RequestParam String value,
             @RequestParam(required = false) String store,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate
     ) {
         log.info(
-            "GET /api/products/history?type={}&value={}&store={}&startDate={}&endDate={}",
-            type,
+            "GET /api/products/history?filter={}&value={}&store={}&startDate={}&endDate={}",
+            filter,
             value,
             store,
             startDate,
             endDate
         );
-        var history = productService.getPriceHistory(type, value, store, startDate, endDate);
+        var history = productService.getPriceHistory(filter, value, store, startDate, endDate);
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(history);
