@@ -3,6 +3,7 @@ package com.accesa.pricecomparator.controller;
 import com.accesa.pricecomparator.dto.response.BestDiscountResponse;
 import com.accesa.pricecomparator.model.Discount;
 import com.accesa.pricecomparator.service.DiscountService;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -49,11 +50,12 @@ public class DiscountController {
     @GetMapping("/best")
     public ResponseEntity<List<BestDiscountResponse>> getBestDiscounts(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @RequestParam(defaultValue = "1000") int limit
+            @RequestParam(defaultValue = "1000") @Min(value = 1, message = "Error: limit must be >= 1") int limit
     ) {
         // Default to the current date if no date is provided
         var effectiveDate = (date == null) ? LocalDate.now() : date;
         log.info("GET /api/discounts/best?date={}&limit={}", effectiveDate, limit);
+
         var bestDiscounts = discountService.getBest(effectiveDate, limit);
         return ResponseEntity
                 .status(HttpStatus.OK)
